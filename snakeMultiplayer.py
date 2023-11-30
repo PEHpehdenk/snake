@@ -8,18 +8,23 @@ endGame = False
 
 class Snake:
 
-    def __init__(self, field, name):
+    def __init__(self, field, name, ind):
         self.direction = 0
         self.points = 0
         self.cords = []
         self.cords.append([field.sizeOfField // 2 + 1, field.sizeOfField // 2 + 1])
         self.name = name
+        self.ind = ind
+        self.timeFreeze = 0
 
     def rotate(self, newDirection):
         if abs(self.direction - newDirection) % 2 == 1:
             self.direction = newDirection
 
-    def move(self, current_field):
+    def move(self, current_field, snakes):
+        if self.timeFreeze > 0:
+            self.timeFreeze -= 1
+            return
         x, y = self.cords[-1]
         if self.direction == 0:
             x += 1
@@ -29,12 +34,34 @@ class Snake:
             x -= 1
         if self.direction == 3:
             y += 1
-        if current_field.field[x][y] != "*":
+        if [x, y] not in current_field.bonuses:
             self.cords.pop(0)
         else:
             current_field.field[x][y] = "."
             current_field.bonuses.remove([x, y])
+            current_field.existBonus.remove([x, y])
             self.points += 1
+        if [x, y] in current_field.freezes:
+            current_field.field[x][y] = "."
+            current_field.freezes.remove([x, y])
+            current_field.existBonus.remove([x, y])
+            for snake in snakes:
+                if snake.ind != self.ind:
+                    snake.timeFreeze += 3
+        for portal_ind in range(0, len(current_field.portals)):
+            if [x, y] in current_field.portals[portal_ind]:
+                if current_field.portals[portal_ind][0] == [x, y]:
+                    x, y = current_field.portals[portal_ind][1]
+                else:
+                    x, y = current_field.portals[portal_ind][0]
+                toClearX1, toClearY1 = current_field.portals[portal_ind][0]
+                toClearX2, toClearY2 = current_field.portals[portal_ind][1]
+                current_field.field[toClearX1][toClearY1] = "."
+                current_field.field[toClearX2][toClearY2] = "."
+                current_field.existBonus.remove(current_field.portals[portal_ind][0])
+                current_field.existBonus.remove(current_field.portals[portal_ind][1])
+                current_field.portals.pop(portal_ind)
+                break
         self.cords.append([x, y])
 
     def isStuck(self, current_field):
@@ -52,6 +79,9 @@ class Field:
     def __init__(self, n):
         self.field = []
         self.bonuses = []
+        self.portals = []
+        self.freezes = []
+        self.existBonus = []
         self.sizeOfField = 0
         for i in range(0, n + 2):
             if i == 0 or i == n + 1:
@@ -68,12 +98,13 @@ class Field:
                 wallsCount -= 1
 
     def fieldUpdate(self, snakes):
-        isBonus = False
-        for lines in self.field:
-            if "*" in lines:
-                isBonus = True
-        if not isBonus:
+        if len(self.bonuses) == 0:
             self.createBonus(snakes)
+        if len(self.portals) == 0:
+            self.createPortal(snakes)
+        if len(self.freezes) == 0:
+            self.createFreeze(snakes)
+
 
     def drawField(self, snakes):
         drawingField = copy.deepcopy(self.field)
@@ -93,6 +124,8 @@ class Field:
         while True:
             x, y = random.randint(0, self.sizeOfField - 1), random.randint(0, self.sizeOfField - 1)
             if self.field[x][y] == '.':
+                if [x, y] in self.existBonus:
+                    continue
                 isIsSnake = False
                 for snake in snakes:
                     if [x, y] in snake.cords:
@@ -100,7 +133,46 @@ class Field:
                         break
                 if not isIsSnake:
                     self.field[x][y] = "*"
+                    self.existBonus.append([x, y])
                     self.bonuses.append([x, y])
+                    return
+
+
+    def createFreeze(self, snakes):
+        while True:
+            x, y = random.randint(0, self.sizeOfField - 1), random.randint(0, self.sizeOfField - 1)
+            if self.field[x][y] == '.':
+                if [x, y] in self.existBonus:
+                    continue
+                isIsSnake = False
+                for snake in snakes:
+                    if [x, y] in snake.cords:
+                        isIsSnake = True
+                        break
+                if not isIsSnake:
+                    self.field[x][y] = "F"
+                    self.existBonus.append([x, y])
+                    self.freezes.append([x, y])
+                    return
+
+    def createPortal(self, snakes):
+        while True:
+            x, y = random.randint(0, self.sizeOfField - 1), random.randint(0, self.sizeOfField - 1)
+            x2, y2 = random.randint(0, self.sizeOfField - 1), random.randint(0, self.sizeOfField - 1)
+            if self.field[x][y] == '.' and self.field[x2][y2] == '.' and [x, y] != [x2, y2]:
+                if [x, y] in self.existBonus:
+                    continue
+                isIsSnake = False
+                for snake in snakes:
+                    if [x, y] in snake.cords or [x2, y2] in snake.cords:
+                        isIsSnake = True
+                        break
+                if not isIsSnake:
+                    self.field[x][y] = "P"
+                    self.field[x2][y2] = "P"
+                    self.existBonus.append([x, y])
+                    self.existBonus.append([x2, y2])
+                    self.portals.append([[x, y], [x2, y2]])
                     return
 
 
@@ -111,8 +183,11 @@ while True:
         break
     except Exception:
         print("Невозможно создать поле данного размера")
-player = Snake(gameField, "Player")
-AISnake = Snake(gameField, "AI")
+allSnakes = []
+player = Snake(gameField, "Player", 0)
+AISnake = Snake(gameField, "AI", 1)
+allSnakes.append(player)
+allSnakes.append(AISnake)
 while True:
     print("Введите скорость:")
     try:
@@ -134,19 +209,19 @@ while True:
         break
     except Exception:
         print("Неверные данные")
-player.move(gameField)
+
 
 def thread_function1():
     global player, AISnake, gameField, endGame, speed
     while not endGame:
         os.system('cls')
-        player.move(gameField)
-        AISnake.move(gameField)
-        gameField.fieldUpdate([player, AISnake])
-        gameField.drawField([player, AISnake])
+        player.move(gameField, allSnakes)
+        AISnake.move(gameField, allSnakes)
+        gameField.fieldUpdate(allSnakes)
+        gameField.drawField(allSnakes)
         if player.isStuck(gameField):
             os.system('cls')
-            gameField.drawField([player, AISnake])
+            gameField.drawField(allSnakes)
             endGame = True
             exit(0)
         time.sleep(speed)
