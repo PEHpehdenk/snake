@@ -8,7 +8,7 @@ endGame = False
 
 class Snake:
 
-    def __init__(self, current_field, name, ind, speed):
+    def __init__(self, current_field, name, ind, speed, enableStuck):
         self.direction = 0
         self.points = 0
         self.cords = []
@@ -19,24 +19,51 @@ class Snake:
         self.count_of_bricks = 0
         self.speed = speed
         self.lives = 3
+        self.enableStuck = enableStuck
+        self.immortalTime = 5
 
+
+    def isInField(self, current_field, snakes):
+        x, y = self.cords[-1]
+        if x >= 0 and x < current_field.sizeOfField + 1 and y >= 0 and y < current_field.sizeOfField + 1:
+            return True
+        return False
     def isStuck(self, current_field, snakes):
         x, y = self.cords[-1]
+        if self.enableStuck:
+            for snake in snakes:
+                if [x, y] in snake.cords and snake.ind != self.ind:
+                    if self.immortalTime == 0:
+                        current_field.field[x][y] = "▦"
+                        self.lives -= 1
+                        if self.lives == 0:
+                            current_field.drawField(snakes)
+                            exit(0)
+                    if self.immortalTime == 0 or not self.isInField(current_field, snakes):
+                        self.immortalTime += 5
+                        self.cords = [[current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1]]
+                    return True
         if [x, y] in self.cords[:-1]:
-            current_field.field[x][y] = "▦"
-            self.lives -= 1
-            if self.lives == 0:
-                current_field.drawField(snakes)
-                exit(0)
-            self.cords = [[current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1]]
+            if self.immortalTime == 0:
+                current_field.field[x][y] = "▦"
+                self.lives -= 1
+                if self.lives == 0:
+                    current_field.drawField(snakes)
+                    exit(0)
+            if self.immortalTime == 0 or not self.isInField(current_field, snakes):
+                self.immortalTime += 5
+                self.cords = [[current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1]]
             return True
         if current_field.field[x][y] == '#':
-            current_field.field[x][y] = "▦"
-            self.lives -= 1
-            if self.lives == 0:
-                current_field.drawField(snakes)
-                exit(0)
-            self.cords = [[current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1]]
+            if self.immortalTime == 0:
+                current_field.field[x][y] = "▦"
+                self.lives -= 1
+                if self.lives == 0:
+                    current_field.drawField(snakes)
+                    exit(0)
+            if self.immortalTime == 0 or not self.isInField(current_field, snakes):
+                self.immortalTime += 5
+                self.cords = [[current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1]]
             return True
         return False
 
@@ -45,6 +72,8 @@ class Snake:
             self.direction = newDirection
 
     def move(self, current_field, snakes):
+        if self.immortalTime > 0:
+            self.immortalTime -= 1
         if self.timeFreeze > 0:
             self.timeFreeze -= 1
             return
@@ -265,10 +294,21 @@ while True:
         break
     except Exception:
         print("Невозможно выбрать данную скорость")
+while True:
+    print("Включить возможность змей сталкиваться? (0 - нет, 1 - да):")
+    try:
+        enableStucking = int(input())
+        if enableStucking > 1 or enableStucking < 0:
+            print("Неверный формат данных")
+            continue
+        enableStucking = bool(enableStucking)
+        break
+    except Exception:
+        print("Неверный формат данных")
 gameField = Field(n, startSpeed)
 allSnakes = []
-player = Snake(gameField, "Player", 0, startSpeed)
-AISnake = Snake(gameField, "AI", 1, startSpeed)
+player = Snake(gameField, "Player", 0, startSpeed, enableStucking)
+AISnake = Snake(gameField, "AI", 1, startSpeed, enableStucking)
 allSnakes.append(player)
 allSnakes.append(AISnake)
 for snake in allSnakes:
