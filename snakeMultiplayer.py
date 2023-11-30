@@ -8,16 +8,39 @@ endGame = False
 
 class Snake:
 
-    def __init__(self, field, name, ind):
+    def __init__(self, current_field, name, ind, speed):
         self.direction = 0
         self.points = 0
         self.cords = []
-        self.cords.append([field.sizeOfField // 2 + 1, field.sizeOfField // 2 + 1])
+        self.cords.append([current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1])
         self.name = name
         self.ind = ind
         self.timeFreeze = 0
+        self.count_of_bricks = 0
+        self.speed = speed
+        self.lives = 3
 
-    def rotate(self, newDirection):
+    def isStuck(self, current_field, snakes):
+        x, y = self.cords[-1]
+        if [x, y] in self.cords[:-1]:
+            current_field.field[x][y] = "▦"
+            self.lives -= 1
+            if self.lives == 0:
+                current_field.drawField(snakes)
+                exit(0)
+            self.cords = [[current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1]]
+            return True
+        if current_field.field[x][y] == '#':
+            current_field.field[x][y] = "▦"
+            self.lives -= 1
+            if self.lives == 0:
+                current_field.drawField(snakes)
+                exit(0)
+            self.cords = [[current_field.sizeOfField // 2 + 1, current_field.sizeOfField // 2 + 1]]
+            return True
+        return False
+
+    def rotate(self, newDirection, snakes):
         if abs(self.direction - newDirection) % 2 == 1:
             self.direction = newDirection
 
@@ -35,12 +58,25 @@ class Snake:
         if self.direction == 3:
             y += 1
         if [x, y] not in current_field.bonuses:
+            if self.count_of_bricks > 0:
+                self.count_of_bricks -= 1
+                current_field.field[self.cords[0][0]][self.cords[0][1]] = "#"
             self.cords.pop(0)
         else:
             current_field.field[x][y] = "."
             current_field.bonuses.remove([x, y])
             current_field.existBonus.remove([x, y])
             self.points += 1
+        if [x, y] in current_field.extraLives:
+            self.lives += 1
+            current_field.field[x][y] = "."
+            current_field.extraLives.remove([x, y])
+            current_field.existBonus.remove([x, y])
+        if [x, y] in current_field.bricks:
+            self.count_of_bricks += 5
+            current_field.field[x][y] = "."
+            current_field.bricks.remove([x, y])
+            current_field.existBonus.remove([x, y])
         if [x, y] in current_field.freezes:
             current_field.field[x][y] = "."
             current_field.freezes.remove([x, y])
@@ -63,26 +99,20 @@ class Snake:
                 current_field.portals.pop(portal_ind)
                 break
         self.cords.append([x, y])
-
-    def isStuck(self, current_field):
-        x, y = self.cords[-1]
-        if [x, y] in self.cords[:-1]:
-            current_field.field[x][y] = "▦"
-            return True
-        if current_field.field[x][y] == '#':
-            current_field.field[x][y] = "▦"
-            return True
-        return False
+        self.isStuck(current_field, snakes)
 
 
 class Field:
-    def __init__(self, n):
+    def __init__(self, n, speed):
         self.field = []
         self.bonuses = []
         self.portals = []
         self.freezes = []
+        self.bricks = []
+        self.extraLives = []
         self.existBonus = []
         self.sizeOfField = 0
+        self.speed = speed
         for i in range(0, n + 2):
             if i == 0 or i == n + 1:
                 self.field.append(list(map(str, "#" * (n + 2))))
@@ -104,6 +134,10 @@ class Field:
             self.createPortal(snakes)
         if len(self.freezes) == 0:
             self.createFreeze(snakes)
+        if len(self.bricks) == 0:
+            self.createBricks(snakes)
+        if len(self.extraLives) == 0:
+            self.createExtraLives(snakes)
 
 
     def drawField(self, snakes):
@@ -115,10 +149,14 @@ class Field:
                         drawingField[snakeCords[0]][snakeCords[1]] = "▣"
                     else:
                         drawingField[snakeCords[0]][snakeCords[1]] = "■"
+        for x in range(0, self.sizeOfField + 2):
+            for y in range(0, self.sizeOfField + 2):
+                if self.field[x][y] == "▦":
+                    self.field[x][y] = "#"
         for line in drawingField:
             print(*line, sep="")
         for snake in snakes:
-            print(f"{snake.name}'s points: {snake.points}")
+            print(f"{snake.name}'s points: {snake.points} | {snake.name}'s lives: {snake.lives}")
 
     def createBonus(self, snakes):
         while True:
@@ -138,6 +176,22 @@ class Field:
                     return
 
 
+    def createExtraLives(self, snakes):
+        while True:
+            x, y = random.randint(0, self.sizeOfField - 1), random.randint(0, self.sizeOfField - 1)
+            if self.field[x][y] == '.':
+                if [x, y] in self.existBonus:
+                    continue
+                isIsSnake = False
+                for snake in snakes:
+                    if [x, y] in snake.cords:
+                        isIsSnake = True
+                        break
+                if not isIsSnake:
+                    self.field[x][y] = "H"
+                    self.existBonus.append([x, y])
+                    self.extraLives.append([x, y])
+                    return
     def createFreeze(self, snakes):
         while True:
             x, y = random.randint(0, self.sizeOfField - 1), random.randint(0, self.sizeOfField - 1)
@@ -153,6 +207,24 @@ class Field:
                     self.field[x][y] = "F"
                     self.existBonus.append([x, y])
                     self.freezes.append([x, y])
+                    return
+
+
+    def createBricks(self, snakes):
+        while True:
+            x, y = random.randint(0, self.sizeOfField - 1), random.randint(0, self.sizeOfField - 1)
+            if self.field[x][y] == '.':
+                if [x, y] in self.existBonus:
+                    continue
+                isIsSnake = False
+                for snake in snakes:
+                    if [x, y] in snake.cords:
+                        isIsSnake = True
+                        break
+                if not isIsSnake:
+                    self.field[x][y] = "B"
+                    self.existBonus.append([x, y])
+                    self.bricks.append([x, y])
                     return
 
     def createPortal(self, snakes):
@@ -179,25 +251,29 @@ class Field:
 while True:
     print("Введите размер поля:")
     try:
-        gameField = Field(int(input()))
+        n = int(input())
         break
     except Exception:
         print("Невозможно создать поле данного размера")
-allSnakes = []
-player = Snake(gameField, "Player", 0)
-AISnake = Snake(gameField, "AI", 1)
-allSnakes.append(player)
-allSnakes.append(AISnake)
 while True:
     print("Введите скорость:")
     try:
-        speed = float(input())
-        if speed <= 0:
+        startSpeed = float(input())
+        if startSpeed <= 0:
             print("Невозможно выбрать данную скорость")
             continue
         break
     except Exception:
         print("Невозможно выбрать данную скорость")
+gameField = Field(n, startSpeed)
+allSnakes = []
+player = Snake(gameField, "Player", 0, startSpeed)
+AISnake = Snake(gameField, "AI", 1, startSpeed)
+allSnakes.append(player)
+allSnakes.append(AISnake)
+for snake in allSnakes:
+    snake.speed = startSpeed
+gameField.speed = startSpeed
 while True:
     print("Введите сложность (количество заблокированных клеток):")
     try:
@@ -219,12 +295,10 @@ def thread_function1():
         AISnake.move(gameField, allSnakes)
         gameField.fieldUpdate(allSnakes)
         gameField.drawField(allSnakes)
-        if player.isStuck(gameField):
-            os.system('cls')
-            gameField.drawField(allSnakes)
+        if player.lives == 0:
             endGame = True
             exit(0)
-        time.sleep(speed)
+        time.sleep(gameField.speed)
     exit(0)
 
 
@@ -234,14 +308,14 @@ def thread_function2():
     while not endGame:
         newDirection = str(input())
         if newDirection == "a":
-            player.rotate(1)
+            player.rotate(1, allSnakes)
         if newDirection == "w":
-            player.rotate(2)
+            player.rotate(2, allSnakes)
         if newDirection == "s":
-            player.rotate(0)
+            player.rotate(0, allSnakes)
         if newDirection == 'd':
-            player.rotate(3)
-        time.sleep(speed)
+            player.rotate(3, allSnakes)
+        time.sleep(player.speed)
     exit(0)
 
 
@@ -252,25 +326,25 @@ def thread_function3():
         bonusCords = gameField.bonuses[-1]
         if AISnake.cords[-1][0] < bonusCords[0]:
             if abs(AISnake.direction - 0) % 2 == 1 or AISnake.direction == 0:
-                AISnake.rotate(0)
-                time.sleep(speed)
+                AISnake.rotate(0, allSnakes)
+                time.sleep(AISnake.speed)
                 continue
         if AISnake.cords[-1][0] > bonusCords[0]:
             if abs(AISnake.direction - 2) % 2 == 1 or AISnake.direction == 2:
-                AISnake.rotate(2)
-                time.sleep(speed)
+                AISnake.rotate(2, allSnakes)
+                time.sleep(AISnake.speed)
                 continue
         if AISnake.cords[-1][1] < bonusCords[1]:
             if abs(AISnake.direction - 3) % 2 == 1 or AISnake.direction == 3:
-                AISnake.rotate(3)
-                time.sleep(speed)
+                AISnake.rotate(3, allSnakes)
+                time.sleep(AISnake.speed)
                 continue
         if AISnake.cords[-1][1] > bonusCords[1]:
             if abs(AISnake.direction - 1) % 2 == 1 or AISnake.direction == 1:
-                AISnake.rotate(1)
-                time.sleep(speed)
+                AISnake.rotate(1, allSnakes)
+                time.sleep(AISnake.speed)
                 continue
-        time.sleep(speed)
+        time.sleep(AISnake.speed)
     exit(0)
 
 
