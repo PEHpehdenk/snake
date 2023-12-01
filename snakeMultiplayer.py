@@ -3,6 +3,7 @@ import time
 import copy
 import random
 import os
+import smartAI
 endGame = False
 
 
@@ -170,6 +171,7 @@ class Field:
 
 
     def drawField(self, snakes):
+        self.fieldUpdate(snakes)
         drawingField = copy.deepcopy(self.field)
         for snake in snakes:
             for snakeCords in snake.cords:
@@ -186,6 +188,23 @@ class Field:
             print(*line, sep="")
         for snake in snakes:
             print(f"{snake.name}'s points: {snake.points} | {snake.name}'s lives: {snake.lives}")
+
+
+    def getFieldWithAll(self, snakes):
+        self.fieldUpdate(snakes)
+        drawingField = copy.deepcopy(self.field)
+        for snake in snakes:
+            for snakeCords in snake.cords:
+                if self.field[snakeCords[0]][snakeCords[1]] != "▦":
+                    if snakeCords == snake.cords[-1]:
+                        drawingField[snakeCords[0]][snakeCords[1]] = "▣"
+                    else:
+                        drawingField[snakeCords[0]][snakeCords[1]] = "■"
+        for x in range(0, self.sizeOfField + 2):
+            for y in range(0, self.sizeOfField + 2):
+                if self.field[x][y] == "▦":
+                    self.field[x][y] = "#"
+        return drawingField
 
     def createBonus(self, snakes):
         while True:
@@ -363,27 +382,7 @@ def thread_function3():
     global player, AISnake, gameField, endGame, speed
     while not endGame:
         gameField.fieldUpdate([player, AISnake])
-        bonusCords = gameField.bonuses[-1]
-        if AISnake.cords[-1][0] < bonusCords[0]:
-            if abs(AISnake.direction - 0) % 2 == 1 or AISnake.direction == 0:
-                AISnake.rotate(0, allSnakes)
-                time.sleep(AISnake.speed)
-                continue
-        if AISnake.cords[-1][0] > bonusCords[0]:
-            if abs(AISnake.direction - 2) % 2 == 1 or AISnake.direction == 2:
-                AISnake.rotate(2, allSnakes)
-                time.sleep(AISnake.speed)
-                continue
-        if AISnake.cords[-1][1] < bonusCords[1]:
-            if abs(AISnake.direction - 3) % 2 == 1 or AISnake.direction == 3:
-                AISnake.rotate(3, allSnakes)
-                time.sleep(AISnake.speed)
-                continue
-        if AISnake.cords[-1][1] > bonusCords[1]:
-            if abs(AISnake.direction - 1) % 2 == 1 or AISnake.direction == 1:
-                AISnake.rotate(1, allSnakes)
-                time.sleep(AISnake.speed)
-                continue
+        AISnake.rotate(smartAI.smartMove(gameField.getFieldWithAll(allSnakes), AISnake.cords[-1], AISnake.lives, AISnake.direction, enableStucking), allSnakes)
         time.sleep(AISnake.speed)
     exit(0)
 
